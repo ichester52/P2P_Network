@@ -14,6 +14,7 @@
 #define MAXLINE 200
 
 int peer_handler(int);
+void handle_list_req(int);
 
 int main(){
    pid_t pid;
@@ -72,8 +73,8 @@ int peer_handler(int sock_child){ // function for file transfer. child process w
 	read_msg[length]='\0';
 	printf("read_msg: %s\n", read_msg);
 	if((!strcmp(read_msg, "REQ LIST"))||(!strcmp(read_msg, "req list"))||(!strcmp(read_msg, "<REQ LIST>"))||(!strcmp(read_msg, "<REQ LIST>\n"))){//list command received
-	// 	handle_list_req(sock_child);// handle list request
-	// 	printf("list request handled.\n");
+		handle_list_req(sock_child);// handle list request
+		printf("list request handled.\n");
 	}
 	// else if((strstr(read_msg,"get")!=NULL)||(strstr(read_msg,"GET")!=NULL)){// get command received
 	// 	xtrct_fname(read_msg, " ");// extract filename from the command		
@@ -90,5 +91,16 @@ int peer_handler(int sock_child){ // function for file transfer. child process w
 	// }
 	
 }//end client handler function
+
+void handle_list_req(int child_socket)
+{
+	char *list_response = "<REP LIST> X\n"
+						  "<1 file1name 2000 xccds>\n"
+						  "<2 file2name file2MD5>\n";
+	if (write(child_socket, list_response, strlen(list_response)) < 0)
+	{
+		printf("LIST RESPONSE FAILURE"); exit(0);
+	}
+}
 
 

@@ -10,8 +10,9 @@
 
 
 
-#define TRACKER_SERVER_IP "10.173.185.74"
+#define TRACKER_SERVER_IP "192.168.5.68"
 #define TRACKER_SERVER_PORT 3490 //should be in the config file
+#define MAXLINE 200
 
 int main(int argc,char *argv[]){
 	struct sockaddr_in server_addr;
@@ -20,7 +21,6 @@ int main(int argc,char *argv[]){
 	if ((sockid = socket(AF_INET,SOCK_STREAM,0))==-1){//create socket
 		printf("socket cannot be created\n"); exit(0);
 	}
-                                              
    
     server_addr.sin_family = AF_INET;//host byte order
     server_addr.sin_port = htons(TRACKER_SERVER_PORT);// convert to network byte order
@@ -41,9 +41,18 @@ int main(int argc,char *argv[]){
 		}
 		printf("List request written to server\n");
 
-        // if((read(sockid,(char *)&msg,sizeof(msg)))< 0){// read what server has said
-		// 	printf("Read  failure\n"); exit(0); 
-		// }
+		char msg[MAXLINE];
+		int list_response_length = read(sockid,msg,MAXLINE);
+
+        if(list_response_length < 0){// read what server has said
+			printf("Read  failure\n"); exit(0); 
+		}
+
+		//message was read succesfully
+		msg[list_response_length] = '\0';
+
+		printf("%s", msg);
+
 		
 		close(sockid);
 		printf("Connection closed\n");
@@ -52,4 +61,3 @@ int main(int argc,char *argv[]){
 
     
 }	     
-  
