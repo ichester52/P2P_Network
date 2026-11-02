@@ -1,4 +1,4 @@
-
+#include <sys/stat.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -210,4 +210,80 @@ int main(int argc,char *argv[]){
 		printf("Connection closed\n");
 	    exit(0);
 	} //end close
+
+    // comment more later 
+	else if (argc > 1 && strcasecmp(argv[1], "createtracker") == 0) { // create tracker command /  argument isn't empty
+        if (argc < 5) {
+            printf("Usage: ./peer createtracker <filename> <description> <md5>\n");
+            close(sockid);
+            exit(0);
+        }
+
+        char *filename = argv[2];
+        char *description = argv[3];
+        char *md5 = argv[4];
+
+        // get file size from the shared folder specified in serverThreadConfig.cfg
+        char filepath[256];
+        snprintf(filepath, sizeof(filepath), "%s/%s", shared_folder, filename);
+        
+        struct stat st;
+        if (stat(filepath, &st) != 0) {
+            printf("Error: File '%s' not found in shared folder '%s'\n", filename, shared_folder);
+            close(sockid);
+            exit(0);
+        }
+        long filesize = st.st_size;
+
+        // grab the peer's local IP address
+        char peer_ip[64];
+        int sock_ip = socket(AF_INET, SOCK_DGRAM, 0);
+
+        if (sock_ip >= 0) {
+            struct sockaddr_in serv;
+            memset(&serv, 0, sizeof(serv));
+            serv.sin_family = AF_INET;
+            serv.sin_addr.s_addr = inet_addr(tracker_ip);
+            serv.sin_port = htons(tracker_port);
+            connect(sock_ip, (const struct sockaddr*)&serv, sizeof(serv));
+            
+            struct sockaddr_in name;
+            socklen_t namelen = sizeof(name);
+            getsockname(sock_ip, (struct sockaddr*)&name, &namelen);
+            inet_ntop(AF_INET, &name.sin_addr, peer_ip, sizeof(peer_ip));
+            close(sock_ip);
+        } else {
+            strcpy(peer_ip, "127.0.0.1"); // Fallback
+        }
+
+        // format protocol message: <createtracker filename filesize description md5 ip-address port-number>\n
+        char message[1024];
+        snprintf(message, sizeof(message), "<createtracker %s %ld %s %s %s %d>\n",
+                 filename, filesize, description, md5, peer_ip, server_listen_port);
+
+        // send to tracker server
+        if (write(sockid, message, strlen(message)) < 0) {
+            printf("Send createtracker failure\n");
+            close(sockid);
+            exit(0);
+        }
+
+        printf("Sent to tracker: %s", message);
+
+        // read the response from tracker server (<createtracker succ>, <createtracker ferr>, etc.)
+        char msg[MAXLINE];
+        int response_len = read(sockid, msg, MAXLINE);
+        if (response_len < 0) {
+            printf("Read failure\n");
+            close(sockid);
+            exit(0);
+        }
+
+        msg[response_len] = '\0';
+        printf("Tracker response: %s", msg);
+
+        close(sockid);
+        printf("Connection closed\n");
+        exit(0);
+    }
 }	     
