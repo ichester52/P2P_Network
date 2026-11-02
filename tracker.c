@@ -41,7 +41,7 @@ int main(){
 	   printf(" Tracker  SERVER CANNOT LISTEN\n"); exit(0);
    }                                        
    
-   int sockaddr_size = sizeof(struct sockaddr_in);
+	socklen_t sockaddr_size = sizeof(struct sockaddr_in); // address size of type socklen_t is expected
 
    while(1) { //accept  connection from every requester client
 	   if ((sock_child = accept(sockid ,(struct sockaddr *) &client_addr, &(sockaddr_size)))==-1){ /* accept connection and create a socket descriptor for actual work */
@@ -89,6 +89,8 @@ int peer_handler(int sock_child){ // function for file transfer. child process w
 	// 	tokenize_updatemsg(read_msg);
 	// 	handle_updatetracker_req(sock_child);		
 	// }
+
+	return 0; // for now to handle the warning of non-void function returning a value
 	
 }//end client handler function
 
