@@ -1,0 +1,7 @@
+PeerFolder/peer
+TrackerFolder/tracker
+*.avi
+*.track
+.DS_Store
+torrents/
+TrackerFolder/torrents/
