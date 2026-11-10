@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <string.h>
+#include <strings.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
 
@@ -166,6 +167,14 @@ void start_peer_server(int port)
 
 int main(int argc, char *argv[])
 {
+	if (argc < 2)
+	{
+		printf("Usage: ./peer list|create|get|update|server\n");
+		return 1;
+	}
+
+	// Temporary example address for testing peers on this same machine.
+	const char *peer_ip = "127.0.0.1";
 
 	// Load the configuration files (client and server)
 	load_client_config("clientThreadConfig.cfg");
@@ -202,119 +211,128 @@ int main(int argc, char *argv[])
 	/* If connected successfully*/
 	printf("Socket Connected Successfully\n");
 
-	if (argc > 1 && strcasecmp(argv[1], "list") == 0)
-	{ // if this is LIST command / and argument isn't empty
+	if(!strcmp(argv[1],"list")){// if this is LIST command
 		printf("list request\n");
-		char *list_req = "REQ LIST";
-
-		if ((write(sockid, "REQ LIST", strlen(list_req))) < 0)
-		{ // exclude null pointer because the server will add it
-			printf("Send_request  failure\n");
-			exit(0);
+		char* list_req= "<REQ LIST>\n";
+		if((write(sockid,list_req,strlen(list_req))) < 0){ // Send text without the null terminator.
+			printf("Send_request  failure\n"); exit(0);
 		}
-
 		printf("List request written to server\n");
 
 		char msg[MAXLINE];
-		int list_response_length = read(sockid, msg, MAXLINE);
-
-		if (list_response_length < 0)
-		{ // read what server has said
-			printf("Read failure\n");
-			exit(0);
+		ssize_t list_response_length;
+		while ((list_response_length = read(sockid, msg, sizeof(msg) - 1)) > 0)
+		{
+			msg[list_response_length] = '\0';
+			printf("%s", msg);
 		}
 
-		// message was read succesfully
-		msg[list_response_length] = '\0';
+        if(list_response_length < 0){// read what server has said
+			printf("Read  failure\n"); exit(0); 
+		}
 
-		printf("%s", msg);
+		
+		close(sockid);
+		printf("Connection closed\n");
+	    exit(0);
+	}
+
+	else if (!strcmp(argv[1], "create"))
+	{
+		printf("Create Tracker Message Sending...\n");
+		// Example metadata for testing requests; this is not a real file checksum.
+		char create_req[256];
+		snprintf(create_req, sizeof(create_req),
+			"<createtracker test_filename.avi 100400 Test_description 00000000000000000000000000000000 %s %d>\n",
+			peer_ip, server_listen_port);
+		if (write(sockid, create_req, strlen(create_req)) < 0)
+		{
+			printf("Send_request failure\n"); exit(0);
+		}
+
+		printf("Create Request Succefully Sent\n");
+
+		char msg[MAXLINE];
+
+		int response_length = read(sockid, msg, sizeof(msg) - 1);
+
+		if (response_length < 0)
+		{
+			printf("Read Failure\n"); exit(0);
+		}
+
+		msg[response_length] = '\0';
+
+		printf("Response: %s\n", msg);
+
+		close(sockid);
+		printf("Connection Closed\n");
+		exit(0);
+	}
+	else if (!strcmp(argv[1], "get"))
+	{
+		char* get_req_example = "<GET test_filename.avi.track >\n";
+		if (write(sockid, get_req_example, strlen(get_req_example)) < 0)
+		{
+			printf("Failed to write the get request to server\n"); exit(0);
+		}
+
+		printf("Get request was sent\n");
+
+		char get_response[1000];
+
+		ssize_t read_bytes;
+
+		while ((read_bytes = read(sockid, get_response, sizeof(get_response) - 1)) > 0)
+		{
+			get_response[read_bytes] = '\0';
+			printf("%s", get_response);
+		}
+
+		if (read_bytes < 0)
+		{
+			perror("Read failure");
+		}
 
 		close(sockid);
 		printf("Connection closed\n");
 		exit(0);
-	} // end close
 
-	// comment more later
-	else if (argc > 1 && strcasecmp(argv[1], "createtracker") == 0)
-	{ // create tracker command /  argument isn't empty
-		if (argc < 5)
+	}
+
+	else if (!strcmp(argv[1], "update"))
+	{
+		char update_example[200];
+		snprintf(update_example, sizeof(update_example),
+			"<updatetracker test_filename.avi 2848 4200 %s %d>\n",
+			peer_ip, server_listen_port);
+
+		if (write(sockid, update_example, strlen(update_example)) < 0)
 		{
-			printf("Usage: ./peer createtracker <filename> <description> <md5>\n");
-			close(sockid);
+			printf("update request failed\n");
 			exit(0);
 		}
+		
+		printf("Update Request sent Succefully\n");
 
-		char *filename = argv[2];
-		char *description = argv[3];
-		char *md5 = argv[4];
+		char read_response[MAXLINE];
 
-		// get file size from the shared folder specified in serverThreadConfig.cfg
-		char filepath[256];
-		snprintf(filepath, sizeof(filepath), "%s/%s", shared_folder, filename);
+		int bytes_read = read(sockid, read_response, sizeof(read_response) -1);
 
-		struct stat st;
-		if (stat(filepath, &st) != 0)
+		if (bytes_read < 0)
 		{
-			printf("Error: File '%s' not found in shared folder '%s'\n", filename, shared_folder);
-			close(sockid);
-			exit(0);
-		}
-		long filesize = st.st_size;
-
-		// grab the peer's local IP address
-		char peer_ip[64];
-		int sock_ip = socket(AF_INET, SOCK_DGRAM, 0);
-
-		if (sock_ip >= 0)
-		{
-			struct sockaddr_in serv;
-			memset(&serv, 0, sizeof(serv));
-			serv.sin_family = AF_INET;
-			serv.sin_addr.s_addr = inet_addr(tracker_ip);
-			serv.sin_port = htons(tracker_port);
-			connect(sock_ip, (const struct sockaddr *)&serv, sizeof(serv));
-
-			struct sockaddr_in name;
-			socklen_t namelen = sizeof(name);
-			getsockname(sock_ip, (struct sockaddr *)&name, &namelen);
-			inet_ntop(AF_INET, &name.sin_addr, peer_ip, sizeof(peer_ip));
-			close(sock_ip);
+			perror("Read Failure\n");
 		}
 		else
 		{
-			strcpy(peer_ip, "127.0.0.1"); // Fallback
+			read_response[bytes_read] = '\0';
+			printf("Tracker response: %s", read_response);
 		}
-
-		// format protocol message: <createtracker filename filesize description md5 ip-address port-number>\n
-		char message[1024];
-		snprintf(message, sizeof(message), "<createtracker %s %ld %s %s %s %d>\n",
-				 filename, filesize, description, md5, peer_ip, server_listen_port);
-
-		// send to tracker server
-		if (write(sockid, message, strlen(message)) < 0)
-		{
-			printf("Send createtracker failure\n");
-			close(sockid);
-			exit(0);
-		}
-
-		printf("Sent to tracker: %s", message);
-
-		// read the response from tracker server (<createtracker succ>, <createtracker ferr>, etc.)
-		char msg[MAXLINE];
-		int response_len = read(sockid, msg, MAXLINE);
-		if (response_len < 0)
-		{
-			printf("Read failure\n");
-			close(sockid);
-			exit(0);
-		}
-
-		msg[response_len] = '\0';
-		printf("Tracker response: %s", msg);
 
 		close(sockid);
-		printf("Connection closed\n");
-		exit(0);
+		printf("Connection Closed\n");
 	}
+
+	// comment more later
+	
 }
