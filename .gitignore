@@ -1,0 +1,8 @@
+TrackerFolder/tracker
+TrackerFolder/torrents/
+PeerFolder/peer
+peer1/peer
+peer2/peer
+peer3/peer
+*.o
+*.pdf
